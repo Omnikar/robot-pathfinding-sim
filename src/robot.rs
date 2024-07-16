@@ -7,7 +7,7 @@ use pathfinding::directed::astar::astar;
 
 use crate::graph::{FieldGraph, SpatialGraph};
 use crate::physics::{AngularVelocity, Velocity};
-use crate::UNITS_SCALE_FACTOR;
+use crate::{Mode, UNITS_SCALE_FACTOR};
 
 const ROBOT_COLOR: Srgba = RED;
 const ROBOT_BORDER_COLOR: Srgba = DARK_RED;
@@ -25,7 +25,12 @@ impl Plugin for RobotPlugin {
             )
             .add_systems(
                 Update,
-                (follow_path, click_events, recompute_robot_path, face_target),
+                (
+                    follow_path,
+                    recompute_robot_path,
+                    face_target,
+                    mouse_interaction.run_if(in_state(Mode::Normal)),
+                ),
             );
     }
 }
@@ -225,7 +230,7 @@ fn compute_path(start: Vec2, end: Vec2, graph: &SpatialGraph) -> Option<Vec<Vec2
     path.map(|t| t.0.into_iter().map(|i| graph.nodes[i]).collect())
 }
 
-fn click_events(
+fn mouse_interaction(
     mut robot_q: Query<(&mut Transform, &mut TargetPosition), With<Robot>>,
     mouse_pos: Res<crate::MouseWorldPos>,
     mouse_click: Res<ButtonInput<MouseButton>>,

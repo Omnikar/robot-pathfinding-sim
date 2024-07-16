@@ -8,6 +8,9 @@ const BG_SCALE_FACTOR: f32 = 0.5;
 const UNITS_SCALE_FACTOR: f32 = 237.18072;
 
 fn main() {
+    let save_path = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "graph.json".to_owned());
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
@@ -24,10 +27,15 @@ fn main() {
             robot::RobotPlugin,
         ))
         .add_systems(Startup, (add_camera, set_background))
+        .insert_resource(SavePath(save_path))
         .insert_resource(MouseWorldPos(Vec2::ZERO))
-        .add_systems(Update, (set_window_size, mouse_hover))
+        .insert_state(Mode::Normal)
+        .add_systems(Update, (set_window_size, mouse_hover, switch_modes))
         .run();
 }
+
+#[derive(Resource)]
+struct SavePath(String);
 
 fn add_camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle {
@@ -97,6 +105,25 @@ fn mouse_hover(
 
     let world_pos_rounded = (world_pos * 1e2).round() / 1e2;
     use std::io::Write;
-    print!("\r{},{}\x1b[J", world_pos_rounded.x, world_pos_rounded.y);
+    print!("\r{},{}\x1b[J\r", world_pos_rounded.x, world_pos_rounded.y);
     std::io::stdout().flush().unwrap();
+}
+
+#[derive(States, Debug, PartialEq, Eq, Clone, Copy, Hash)]
+enum Mode {
+    Normal,
+    EditGraph,
+}
+
+fn switch_modes(
+    keys: Res<ButtonInput<KeyCode>>,
+    mode: Res<State<Mode>>,
+    mut next_mode: ResMut<NextState<Mode>>,
+) {
+    if keys.just_pressed(KeyCode::KeyE) {
+        next_mode.set(match mode.get() {
+            Mode::Normal => Mode::EditGraph,
+            Mode::EditGraph => Mode::Normal,
+        });
+    }
 }

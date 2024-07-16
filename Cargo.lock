@@ -3213,6 +3213,8 @@ dependencies = [
  "bevy",
  "bevy_prototype_lyon",
  "pathfinding",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
