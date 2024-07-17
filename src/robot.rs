@@ -180,8 +180,11 @@ fn recompute_robot_path(
     }
 
     let (mut follower, target, transform) = q.single_mut();
-    follower.target_path =
-        compute_path(transform.translation.truncate(), target.0, &graph.0).expect("no path found");
+    if let Some(path) = compute_path(transform.translation.truncate(), target.0, &graph.0) {
+        follower.target_path = path;
+    } else {
+        eprintln!("No path found");
+    }
 
     reader.clear();
 }
@@ -195,11 +198,12 @@ fn compute_path(start: Vec2, end: Vec2, graph: &SpatialGraph) -> Option<Vec<Vec2
             .map(|&node| (node - new_node).length())
             .enumerate()
             .min_by(|a, b| a.1.total_cmp(&b.1))
-            .unwrap()
-            .0;
+            .map(|(i, _)| i);
         let new_idx = graph.nodes.len();
         graph.nodes.push(new_node);
-        graph.edges.push((closest, new_idx));
+        if let Some(closest) = closest {
+            graph.edges.push((closest, new_idx));
+        }
     };
     insert_node(start);
     insert_node(end);

@@ -106,7 +106,7 @@ fn mouse_hover(
     let world_pos_rounded = (world_pos * 1e2).round() / 1e2;
     use std::io::Write;
     print!("\r{},{}\x1b[J\r", world_pos_rounded.x, world_pos_rounded.y);
-    std::io::stdout().flush().unwrap();
+    std::io::stdout().flush().expect("IO error");
 }
 
 #[derive(States, Debug, PartialEq, Eq, Clone, Copy, Hash)]
