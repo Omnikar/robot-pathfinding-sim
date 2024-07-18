@@ -16,6 +16,7 @@ In edit mode:
 - While drawing an edge, right click to cancel.
 - Right click a node to delete it.
 - Click both nodes of an existing edge to delete that edge.
+- Click and drag a node to move it.
 
 Save the graph as a json file by pressing `s`.
 
