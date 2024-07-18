@@ -13,8 +13,10 @@ Toggle edit mode by pressing `e`.
 In edit mode:
 - Click two nodes to draw an edge between them.
   - You can click empty space instead of an existing node to create a new node.
+    - You can click on an edge instead of empty space to create a new node on that edge.
 - While drawing an edge, right click to cancel.
 - Right click a node to delete it.
+- Right click an edge to delete it.
 - Click both nodes of an existing edge to delete that edge.
 - Click and drag a node to move it.
 

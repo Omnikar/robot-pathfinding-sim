@@ -1,3 +1,4 @@
+use std::collections::HashSet as Set;
 use std::io::Write;
 
 use bevy::{color::palettes::css::*, prelude::*};
@@ -23,7 +24,7 @@ impl Plugin for FieldGraphPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(DrawnGraph::default())
             .insert_resource(EditState::Normal)
-            .insert_resource(HoveredNode(None, None))
+            .insert_resource(Hovered::default())
             .add_systems(Startup, init_field_graph.before(draw_field_graph))
             .add_systems(Startup, draw_field_graph)
             .add_systems(
@@ -144,20 +145,6 @@ fn draw_node(
         .id()
 }
 
-fn replace_node(
-    i: usize,
-    stroke: Srgba,
-    fill: Srgba,
-    graph: &FieldGraph,
-    drawn: &mut DrawnGraph,
-    commands: &mut Commands,
-) {
-    if let Some(&id) = drawn.nodes.get(i) {
-        commands.entity(id).despawn();
-        drawn.nodes[i] = draw_node(graph.0.nodes[i], stroke, fill, commands);
-    }
-}
-
 fn draw_edge(p1: Vec2, p2: Vec2, color: Srgba, commands: &mut Commands) -> Entity {
     let zmod = match color {
         NEG_HIGHLIGHT => 0.12,
@@ -177,6 +164,65 @@ fn draw_edge(p1: Vec2, p2: Vec2, color: Srgba, commands: &mut Commands) -> Entit
         .id()
 }
 
+fn replace_node(
+    i: usize,
+    stroke: Srgba,
+    fill: Srgba,
+    graph: &FieldGraph,
+    drawn: &mut DrawnGraph,
+    commands: &mut Commands,
+) {
+    if let Some(&id) = drawn.nodes.get(i) {
+        commands.entity(id).despawn();
+        drawn.nodes[i] = draw_node(graph.0.nodes[i], stroke, fill, commands);
+    }
+}
+
+fn replace_edge(
+    i: usize,
+    color: Srgba,
+    graph: &FieldGraph,
+    drawn: &mut DrawnGraph,
+    commands: &mut Commands,
+) {
+    if let Some(&id) = drawn.edges.get(i) {
+        commands.entity(id).despawn();
+        let edge = graph.0.edges[i];
+        drawn.edges[i] = draw_edge(
+            graph.0.nodes[edge.0],
+            graph.0.nodes[edge.1],
+            color,
+            commands,
+        );
+    }
+}
+
+fn split_edges<T: std::ops::Deref<Target = usize>>(
+    new_i: usize,
+    edges: impl IntoIterator<Item = T>,
+    graph: &mut FieldGraph,
+    drawn: &mut DrawnGraph,
+    commands: &mut Commands,
+) {
+    let mut edges_to_replace: Vec<_> = edges.into_iter().map(|x| *x).collect();
+    edges_to_replace.sort_unstable();
+    for edge_i in edges_to_replace.into_iter().rev() {
+        let (start_i, end_i) = graph.0.edges.remove(edge_i);
+        let (start, end) = (graph.0.nodes[start_i], graph.0.nodes[end_i]);
+
+        graph.0.edges.push((start_i, new_i));
+        graph.0.edges.push((new_i, end_i));
+
+        commands.entity(drawn.edges.remove(edge_i)).despawn();
+        drawn
+            .edges
+            .push(draw_edge(start, graph.0.nodes[new_i], STROKE, commands));
+        drawn
+            .edges
+            .push(draw_edge(graph.0.nodes[new_i], end, STROKE, commands));
+    }
+}
+
 #[derive(Resource, Clone, Copy)]
 enum EditState {
     Normal,
@@ -184,8 +230,12 @@ enum EditState {
     DraggingNode(usize, Vec2),
 }
 
-#[derive(Resource, Clone, Copy)]
-struct HoveredNode(Option<usize>, Option<usize>);
+#[derive(Resource, Clone, Default)]
+struct Hovered {
+    // (index of hovered, index of highlighted)
+    node: (Option<usize>, Option<usize>),
+    edges: (Set<usize>, Set<usize>),
+}
 
 struct MouseDragDetector {
     timer: Timer,
@@ -218,7 +268,7 @@ fn update_mouse_state(
     graph: Res<FieldGraph>,
     mut edit_state: ResMut<EditState>,
     mut drawn: ResMut<DrawnGraph>,
-    mut hovered_node_res: ResMut<HoveredNode>,
+    mut hovered: ResMut<Hovered>,
     mut drag_detector: Local<MouseDragDetector>,
     mut commands: Commands,
 ) {
@@ -265,33 +315,64 @@ fn update_mouse_state(
         _ => {}
     }
 
-    let hovered_node = find_hovered_node(mouse_pos.0);
+    hovered.node.0 = find_hovered_node(mouse_pos.0);
     if !dragging {
         // Handle hovered node coloring
-        if hovered_node != hovered_node_res.1 {
-            if let Some(i) = hovered_node_res.1 {
+        if hovered.node.0 != hovered.node.1 {
+            if let Some(i) = hovered.node.1 {
                 replace_node(i, STROKE, FILL, &graph, &mut drawn, &mut commands);
             }
-            if let Some(i) = hovered_node {
+            if let Some(i) = hovered.node.0 {
                 replace_node(i, HIGHLIGHT, FILL, &graph, &mut drawn, &mut commands);
             }
         }
-        hovered_node_res.1 = hovered_node;
+        hovered.node.1 = hovered.node.0;
     }
-    hovered_node_res.0 = hovered_node;
+
+    hovered.edges.0 =
+        if hovered.node.0.is_none() && !matches!(*edit_state, EditState::DraggingNode(..)) {
+            graph
+                .0
+                .edges
+                .iter()
+                .enumerate()
+                .filter_map(|(i, &(start_i, end_i))| {
+                    let (start, end) = (graph.0.nodes[start_i], graph.0.nodes[end_i]);
+                    let (vec1, vec2) = (start - mouse_pos.0, end - mouse_pos.0);
+                    (vec1.perp_dot(vec2).abs() < 0.1 && vec1.dot(vec2) < 0.0).then_some(i)
+                })
+                .collect()
+        } else {
+            Set::new()
+        };
+    // Highlight unhighlighted but hovered edges
+    for &edge_i in hovered.edges.0.difference(&hovered.edges.1) {
+        replace_edge(edge_i, HIGHLIGHT, &graph, &mut drawn, &mut commands);
+    }
+    // Unhighlight highlighted but not hovered edges
+    for &edge_i in hovered.edges.1.difference(&hovered.edges.0) {
+        replace_edge(edge_i, STROKE, &graph, &mut drawn, &mut commands);
+    }
+    // This `let` sequence is to appease the borrow checker.
+    // Otherwise it attempts to take two separate borrows to `hovered.edges`,
+    // rather than taking borrows to two separate fields from the same mutable
+    // borrow of `hovered.edges`.
+    let edges = &mut hovered.edges;
+    let (hovered_edges, highlighted_edges) = (&edges.0, &mut edges.1);
+    highlighted_edges.clone_from(hovered_edges);
 }
 
 #[allow(clippy::too_many_arguments)]
 fn mouse_interaction(
     mouse_pos: Res<MouseWorldPos>,
     mouse_click: Res<ButtonInput<MouseButton>>,
-    hovered_node: Res<HoveredNode>,
+    hovered: Res<Hovered>,
     mut edit_state: ResMut<EditState>,
     mut graph: ResMut<FieldGraph>,
     mut drawn: ResMut<DrawnGraph>,
     mut commands: Commands,
 ) {
-    match (*edit_state, hovered_node.0) {
+    match (*edit_state, hovered.node.0) {
         // Clicked on a node - start drawing an edge from it
         (EditState::Normal, Some(i)) if mouse_click.just_pressed(MouseButton::Left) => {
             *edit_state = EditState::MakingEdge(i, None);
@@ -318,12 +399,30 @@ fn mouse_interaction(
         }
         // Clicked empty space - create a new node and start drawing an edge from it
         (EditState::Normal, None) if mouse_click.just_pressed(MouseButton::Left) => {
-            let i = graph.0.nodes.len();
+            let new_i = graph.0.nodes.len();
             graph.0.nodes.push(mouse_pos.0);
             drawn
                 .nodes
                 .push(draw_node(mouse_pos.0, STROKE, FILL, &mut commands));
-            *edit_state = EditState::MakingEdge(i, None);
+
+            split_edges(
+                new_i,
+                &hovered.edges.0,
+                &mut graph,
+                &mut drawn,
+                &mut commands,
+            );
+
+            *edit_state = EditState::MakingEdge(new_i, None);
+        }
+        // Right clicked empty space - delete all hovered edges
+        (EditState::Normal, None) if mouse_click.just_pressed(MouseButton::Right) => {
+            let mut edges_to_delete: Vec<_> = hovered.edges.0.iter().copied().collect();
+            edges_to_delete.sort_unstable();
+            for i in edges_to_delete.into_iter().rev() {
+                graph.0.edges.remove(i);
+                commands.entity(drawn.edges.remove(i)).despawn();
+            }
         }
         // Clicked on a node while drawing an edge - create the edge if it doesn't exist already, remove the edge if it does
         (EditState::MakingEdge(start_i, id_o), Some(end_i))
@@ -365,6 +464,15 @@ fn mouse_interaction(
                 STROKE,
                 &mut commands,
             ));
+
+            split_edges(
+                end_i,
+                &hovered.edges.0,
+                &mut graph,
+                &mut drawn,
+                &mut commands,
+            );
+
             *edit_state = EditState::Normal;
         }
         // Right clicked while drawing an edge - cancel the edge drawing
@@ -420,7 +528,7 @@ fn mouse_interaction(
 
 fn on_exit_edit_mode(
     mut edit_state: ResMut<EditState>,
-    hovered_node: Res<HoveredNode>,
+    hovered: Res<Hovered>,
     graph: Res<FieldGraph>,
     mut drawn: ResMut<DrawnGraph>,
     mut commands: Commands,
@@ -428,8 +536,11 @@ fn on_exit_edit_mode(
     if let EditState::MakingEdge(_, Some(id)) = *edit_state {
         commands.entity(id).despawn();
     }
-    if let Some(i) = hovered_node.1 {
+    if let Some(i) = hovered.node.1 {
         replace_node(i, STROKE, FILL, &graph, &mut drawn, &mut commands);
+    }
+    for &i in &hovered.edges.1 {
+        replace_edge(i, STROKE, &graph, &mut drawn, &mut commands);
     }
     *edit_state = EditState::Normal;
 }
