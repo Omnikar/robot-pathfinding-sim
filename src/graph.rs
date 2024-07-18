@@ -248,17 +248,21 @@ fn update_mouse_state(
     };
 
     let dragging = drag_detector.dragging(mouse_pos.0);
-    if dragging {
-        let click_pos = drag_detector.click_pos.unwrap_or(mouse_pos.0);
-        if let Some(i) = find_hovered_node(click_pos) {
-            let relative_pos = graph.0.nodes[i] - click_pos;
-            if let EditState::MakingEdge(_, Some(id)) = *edit_state {
-                commands.entity(id).despawn();
+    match (dragging, matches!(*edit_state, EditState::DraggingNode(..))) {
+        (true, false) => {
+            let click_pos = drag_detector.click_pos.unwrap_or(mouse_pos.0);
+            if let Some(i) = find_hovered_node(click_pos) {
+                let relative_pos = graph.0.nodes[i] - click_pos;
+                if let EditState::MakingEdge(_, Some(id)) = *edit_state {
+                    commands.entity(id).despawn();
+                }
+                *edit_state = EditState::DraggingNode(i, relative_pos);
             }
-            *edit_state = EditState::DraggingNode(i, relative_pos);
         }
-    } else if let EditState::DraggingNode(..) = *edit_state {
-        *edit_state = EditState::Normal;
+        (false, true) => {
+            *edit_state = EditState::Normal;
+        }
+        _ => {}
     }
 
     let hovered_node = find_hovered_node(mouse_pos.0);
