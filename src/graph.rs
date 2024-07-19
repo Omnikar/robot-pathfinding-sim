@@ -4,7 +4,7 @@ use std::io::Write;
 use bevy::{color::palettes::css::*, prelude::*};
 use bevy_prototype_lyon::prelude::*;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, ser::Serializer, ser::SerializeStruct, ser::SerializeMap};
 
 use crate::{Mode, MouseWorldPos, SavePath};
 
@@ -78,7 +78,37 @@ fn init_field_graph(save_path: Res<SavePath>, mut commands: Commands) {
 #[derive(Resource)]
 pub struct FieldGraph(pub SpatialGraph);
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Deserialize)]
+pub struct Nodes(Vec<Vec2>);
+
+impl Serialize for Nodes {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        struct NodeMetaData {
+            location: Vec2,
+        }
+        #[derive(Serialize)]
+        struct Node {
+            label: String,
+            metadata: NodeMetaData,
+            
+        }
+        let mut state = serializer.serialize_map(Some(self.0.len()))?;
+        for (i, loc) in self.0.iter().enumerate() {
+            let label = i.to_string();
+            let current_node = Node{
+                label: label.clone(),
+                metadata: NodeMetaData {
+                    location: loc.clone(),
+                },
+            };
+            state.serialize_entry(label.as_str(), &current_node)?;
+        }
+        state.end()
+    }
+}
+
+#[derive(Clone, Deserialize)]
 pub struct SpatialGraph {
     pub nodes: Vec<Vec2>,
     pub edges: Vec<(usize, usize)>,
@@ -100,6 +130,38 @@ impl SpatialGraph {
             .enumerate()
             .filter(move |&(_, (a, b))| a == node_i || b == node_i)
             .map(|tup| tup.0)
+    }
+}
+
+impl Serialize for SpatialGraph {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        struct Edge {
+            source: usize,
+            target: usize,
+        }
+        #[derive(Serialize)]
+        struct Graph {
+            directed: bool,
+            r#type: String,
+            label: String,
+            nodes: Nodes,
+            edges: Vec<Edge>,
+        }
+        let mut edges = Vec::<Edge>::new();
+        for edge in self.edges.iter() {
+            edges.push(Edge{source: edge.0, target: edge.1});
+        }
+        let mut state = serializer.serialize_struct("graph", 1)?;
+        let graph = Graph {
+            directed: false,
+            r#type: "spatial node".to_string(),
+            label: "spatial node graph".to_string(),
+            nodes: Nodes(self.nodes.clone()),
+            edges: edges,
+        };
+        state.serialize_field("graph", &graph)?;
+        state.end()
     }
 }
 
