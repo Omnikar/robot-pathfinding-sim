@@ -18,6 +18,7 @@ const FILL: Srgba = WHITE;
 const STROKE: Srgba = GREEN;
 const HIGHLIGHT: Srgba = SKY_BLUE;
 const NEG_HIGHLIGHT: Srgba = RED;
+const HIGHLIGHT_2: Srgba = ORANGE;
 
 pub struct FieldGraphPlugin;
 impl Plugin for FieldGraphPlugin {
@@ -47,36 +48,43 @@ fn init_field_graph(save_path: Res<SavePath>, mut commands: Commands) {
         .and_then(|f| serde_json::from_reader(f).map_err(E::from))
     {
         Ok(graph) => graph,
-        Err(_) => SpatialGraph {
-            nodes: vec![
-                Vec2::new(0.0, 0.60),
-                Vec2::new(2.19, -0.26),
-                Vec2::new(2.25, 1.58),
-                Vec2::new(0.0, 2.12),
-                Vec2::new(-1.99, 1.70),
-                Vec2::new(-1.47, -0.45),
-                Vec2::new(-0.45, -1.44),
-                Vec2::new(1.66, -1.42),
-            ],
-            edges: vec![
-                (0, 1),
-                (0, 3),
-                (0, 5),
-                (1, 2),
-                (2, 3),
-                (3, 4),
-                (4, 5),
-                (5, 6),
-                (6, 7),
-                (7, 1),
-            ],
+        Err(_) => FieldGraph {
+            sg: SpatialGraph {
+                nodes: vec![
+                    Vec2::new(0.0, 0.60),
+                    Vec2::new(2.19, -0.26),
+                    Vec2::new(2.25, 1.58),
+                    Vec2::new(0.0, 2.12),
+                    Vec2::new(-1.99, 1.70),
+                    Vec2::new(-1.47, -0.45),
+                    Vec2::new(-0.45, -1.44),
+                    Vec2::new(1.66, -1.42),
+                ],
+                edges: vec![
+                    (0, 1),
+                    (0, 3),
+                    (0, 5),
+                    (1, 2),
+                    (2, 3),
+                    (3, 4),
+                    (4, 5),
+                    (5, 6),
+                    (6, 7),
+                    (7, 1),
+                ],
+            },
+            shoot_idxs: Set::new(),
         },
     };
-    commands.insert_resource(FieldGraph(graph));
+    commands.insert_resource(graph);
 }
 
-#[derive(Resource)]
-pub struct FieldGraph(pub SpatialGraph);
+#[derive(Resource, Serialize, Deserialize)]
+pub struct FieldGraph {
+    #[serde(flatten)]
+    pub sg: SpatialGraph,
+    pub shoot_idxs: Set<usize>,
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SpatialGraph {
@@ -110,14 +118,17 @@ struct DrawnGraph {
 }
 
 fn draw_field_graph(graph: Res<FieldGraph>, mut drawn: ResMut<DrawnGraph>, mut commands: Commands) {
-    for &node in &graph.0.nodes {
-        drawn
-            .nodes
-            .push(draw_node(node, STROKE, FILL, &mut commands));
+    for (i, &node) in graph.sg.nodes.iter().enumerate() {
+        drawn.nodes.push(draw_node(
+            node,
+            STROKE,
+            point_fill(&graph, i),
+            &mut commands,
+        ));
     }
-    for &edge in &graph.0.edges {
-        let p1 = graph.0.nodes[edge.0];
-        let p2 = graph.0.nodes[edge.1];
+    for &edge in &graph.sg.edges {
+        let p1 = graph.sg.nodes[edge.0];
+        let p2 = graph.sg.nodes[edge.1];
         drawn.edges.push(draw_edge(p1, p2, STROKE, &mut commands));
     }
 }
@@ -174,7 +185,7 @@ fn replace_node(
 ) {
     if let Some(&id) = drawn.nodes.get(i) {
         commands.entity(id).despawn();
-        drawn.nodes[i] = draw_node(graph.0.nodes[i], stroke, fill, commands);
+        drawn.nodes[i] = draw_node(graph.sg.nodes[i], stroke, fill, commands);
     }
 }
 
@@ -187,10 +198,10 @@ fn replace_edge(
 ) {
     if let Some(&id) = drawn.edges.get(i) {
         commands.entity(id).despawn();
-        let edge = graph.0.edges[i];
+        let edge = graph.sg.edges[i];
         drawn.edges[i] = draw_edge(
-            graph.0.nodes[edge.0],
-            graph.0.nodes[edge.1],
+            graph.sg.nodes[edge.0],
+            graph.sg.nodes[edge.1],
             color,
             commands,
         );
@@ -207,19 +218,19 @@ fn split_edges<T: std::ops::Deref<Target = usize>>(
     let mut edges_to_replace: Vec<_> = edges.into_iter().map(|x| *x).collect();
     edges_to_replace.sort_unstable();
     for edge_i in edges_to_replace.into_iter().rev() {
-        let (start_i, end_i) = graph.0.edges.remove(edge_i);
-        let (start, end) = (graph.0.nodes[start_i], graph.0.nodes[end_i]);
+        let (start_i, end_i) = graph.sg.edges.remove(edge_i);
+        let (start, end) = (graph.sg.nodes[start_i], graph.sg.nodes[end_i]);
 
-        graph.0.edges.push((start_i, new_i));
-        graph.0.edges.push((new_i, end_i));
+        graph.sg.edges.push((start_i, new_i));
+        graph.sg.edges.push((new_i, end_i));
 
         commands.entity(drawn.edges.remove(edge_i)).despawn();
         drawn
             .edges
-            .push(draw_edge(start, graph.0.nodes[new_i], STROKE, commands));
+            .push(draw_edge(start, graph.sg.nodes[new_i], STROKE, commands));
         drawn
             .edges
-            .push(draw_edge(graph.0.nodes[new_i], end, STROKE, commands));
+            .push(draw_edge(graph.sg.nodes[new_i], end, STROKE, commands));
     }
 }
 
@@ -285,7 +296,7 @@ fn update_mouse_state(
 
     let find_hovered_node = |pos: Vec2| {
         graph
-            .0
+            .sg
             .nodes
             .iter()
             .copied()
@@ -302,7 +313,7 @@ fn update_mouse_state(
         (true, false) => {
             let click_pos = drag_detector.click_pos.unwrap_or(mouse_pos.0);
             if let Some(i) = find_hovered_node(click_pos) {
-                let relative_pos = graph.0.nodes[i] - click_pos;
+                let relative_pos = graph.sg.nodes[i] - click_pos;
                 if let EditState::MakingEdge(_, Some(id)) = *edit_state {
                     commands.entity(id).despawn();
                 }
@@ -320,10 +331,24 @@ fn update_mouse_state(
         // Handle hovered node coloring
         if hovered.node.0 != hovered.node.1 {
             if let Some(i) = hovered.node.1 {
-                replace_node(i, STROKE, FILL, &graph, &mut drawn, &mut commands);
+                replace_node(
+                    i,
+                    STROKE,
+                    point_fill(&graph, i),
+                    &graph,
+                    &mut drawn,
+                    &mut commands,
+                );
             }
             if let Some(i) = hovered.node.0 {
-                replace_node(i, HIGHLIGHT, FILL, &graph, &mut drawn, &mut commands);
+                replace_node(
+                    i,
+                    HIGHLIGHT,
+                    point_fill(&graph, i),
+                    &graph,
+                    &mut drawn,
+                    &mut commands,
+                );
             }
         }
         hovered.node.1 = hovered.node.0;
@@ -332,12 +357,12 @@ fn update_mouse_state(
     hovered.edges.0 =
         if hovered.node.0.is_none() && !matches!(*edit_state, EditState::DraggingNode(..)) {
             graph
-                .0
+                .sg
                 .edges
                 .iter()
                 .enumerate()
                 .filter_map(|(i, &(start_i, end_i))| {
-                    let (start, end) = (graph.0.nodes[start_i], graph.0.nodes[end_i]);
+                    let (start, end) = (graph.sg.nodes[start_i], graph.sg.nodes[end_i]);
                     let (vec1, vec2) = (start - mouse_pos.0, end - mouse_pos.0);
                     (vec1.perp_dot(vec2).abs() < 0.1 && vec1.dot(vec2) < 0.0).then_some(i)
                 })
@@ -366,6 +391,7 @@ fn update_mouse_state(
 fn mouse_interaction(
     mouse_pos: Res<MouseWorldPos>,
     mouse_click: Res<ButtonInput<MouseButton>>,
+    key_press: Res<ButtonInput<KeyCode>>,
     hovered: Res<Hovered>,
     mut edit_state: ResMut<EditState>,
     mut graph: ResMut<FieldGraph>,
@@ -380,27 +406,41 @@ fn mouse_interaction(
         // Right clicked a node - delete it and all connecting edges
         (EditState::Normal, Some(i)) if mouse_click.just_pressed(MouseButton::Right) => {
             // Reverse index list so that sequential deletion doesn't shift the indices being affected
-            let edges_to_delete = graph.0.connected_edges(i).rev().collect::<Vec<_>>();
+            let edges_to_delete = graph.sg.connected_edges(i).rev().collect::<Vec<_>>();
             let del_edge = |i| {
-                graph.0.edges.remove(i);
+                graph.sg.edges.remove(i);
                 commands.entity(drawn.edges.remove(i)).despawn();
             };
             edges_to_delete.into_iter().for_each(del_edge);
             graph
-                .0
+                .sg
                 .edges
                 .iter_mut()
                 .flat_map(|(a, b)| [a, b])
                 .filter(|v| **v > i)
                 .for_each(|v| *v -= 1);
 
-            graph.0.nodes.remove(i);
+            graph.sg.nodes.remove(i);
             commands.entity(drawn.nodes.remove(i)).despawn();
+
+            graph.shoot_idxs.remove(&i);
+            let to_shift = graph
+                .shoot_idxs
+                .iter()
+                .copied()
+                .filter(|&j| j > i)
+                .collect::<Vec<_>>();
+            for j in &to_shift {
+                graph.shoot_idxs.remove(j);
+            }
+            for j in to_shift {
+                graph.shoot_idxs.insert(j - 1);
+            }
         }
         // Clicked empty space - create a new node and start drawing an edge from it
         (EditState::Normal, None) if mouse_click.just_pressed(MouseButton::Left) => {
-            let new_i = graph.0.nodes.len();
-            graph.0.nodes.push(mouse_pos.0);
+            let new_i = graph.sg.nodes.len();
+            graph.sg.nodes.push(mouse_pos.0);
             drawn
                 .nodes
                 .push(draw_node(mouse_pos.0, STROKE, FILL, &mut commands));
@@ -420,7 +460,7 @@ fn mouse_interaction(
             let mut edges_to_delete: Vec<_> = hovered.edges.0.iter().copied().collect();
             edges_to_delete.sort_unstable();
             for i in edges_to_delete.into_iter().rev() {
-                graph.0.edges.remove(i);
+                graph.sg.edges.remove(i);
                 commands.entity(drawn.edges.remove(i)).despawn();
             }
         }
@@ -431,14 +471,14 @@ fn mouse_interaction(
             if let Some(id) = id_o {
                 commands.entity(id).despawn();
             }
-            if let Some(existing_edge) = graph.0.find_edge((start_i, end_i)) {
-                graph.0.edges.remove(existing_edge);
+            if let Some(existing_edge) = graph.sg.find_edge((start_i, end_i)) {
+                graph.sg.edges.remove(existing_edge);
                 commands.entity(drawn.edges.remove(existing_edge)).despawn();
             } else {
-                graph.0.edges.push((start_i, end_i));
+                graph.sg.edges.push((start_i, end_i));
                 drawn.edges.push(draw_edge(
-                    graph.0.nodes[start_i],
-                    graph.0.nodes[end_i],
+                    graph.sg.nodes[start_i],
+                    graph.sg.nodes[end_i],
                     STROKE,
                     &mut commands,
                 ));
@@ -452,14 +492,14 @@ fn mouse_interaction(
             if let Some(id) = id_o {
                 commands.entity(id).despawn();
             }
-            let end_i = graph.0.nodes.len();
-            graph.0.nodes.push(mouse_pos.0);
-            graph.0.edges.push((start_i, end_i));
+            let end_i = graph.sg.nodes.len();
+            graph.sg.nodes.push(mouse_pos.0);
+            graph.sg.edges.push((start_i, end_i));
             drawn
                 .nodes
                 .push(draw_node(mouse_pos.0, STROKE, FILL, &mut commands));
             drawn.edges.push(draw_edge(
-                graph.0.nodes[start_i],
+                graph.sg.nodes[start_i],
                 mouse_pos.0,
                 STROKE,
                 &mut commands,
@@ -488,11 +528,11 @@ fn mouse_interaction(
                 commands.entity(id).despawn();
             }
             let is_edge_deletion =
-                hovered_node.is_some_and(|end_i| graph.0.find_edge((start_i, end_i)).is_some());
+                hovered_node.is_some_and(|end_i| graph.sg.find_edge((start_i, end_i)).is_some());
             let id = draw_edge(
-                graph.0.nodes[start_i],
+                graph.sg.nodes[start_i],
                 match hovered_node {
-                    Some(i) => graph.0.nodes[i],
+                    Some(i) => graph.sg.nodes[i],
                     None => mouse_pos.0,
                 },
                 if is_edge_deletion {
@@ -507,20 +547,41 @@ fn mouse_interaction(
         // Dragging a node
         (EditState::DraggingNode(i, relative_pos), _) => {
             let new_pos = mouse_pos.0 + relative_pos;
-            graph.0.nodes[i] = new_pos;
+            graph.sg.nodes[i] = new_pos;
 
-            replace_node(i, HIGHLIGHT, FILL, &graph, &mut drawn, &mut commands);
+            replace_node(
+                i,
+                HIGHLIGHT,
+                point_fill(&graph, i),
+                &graph,
+                &mut drawn,
+                &mut commands,
+            );
 
-            for edge_i in graph.0.connected_edges(i) {
+            for edge_i in graph.sg.connected_edges(i) {
                 commands.entity(drawn.edges[edge_i]).despawn();
-                let edge = graph.0.edges[edge_i];
+                let edge = graph.sg.edges[edge_i];
                 drawn.edges[edge_i] = draw_edge(
-                    graph.0.nodes[edge.0],
-                    graph.0.nodes[edge.1],
+                    graph.sg.nodes[edge.0],
+                    graph.sg.nodes[edge.1],
                     STROKE,
                     &mut commands,
                 );
             }
+        }
+        // Pressed W; toggle shoot waypoint
+        (EditState::Normal, Some(i)) if key_press.just_pressed(KeyCode::KeyW) => {
+            if !graph.shoot_idxs.remove(&i) {
+                graph.shoot_idxs.insert(i);
+            }
+            replace_node(
+                i,
+                HIGHLIGHT,
+                point_fill(&graph, i),
+                &graph,
+                &mut drawn,
+                &mut commands,
+            );
         }
         _ => {}
     }
@@ -537,7 +598,14 @@ fn on_exit_edit_mode(
         commands.entity(id).despawn();
     }
     if let Some(i) = hovered.node.1 {
-        replace_node(i, STROKE, FILL, &graph, &mut drawn, &mut commands);
+        replace_node(
+            i,
+            STROKE,
+            point_fill(&graph, i),
+            &graph,
+            &mut drawn,
+            &mut commands,
+        );
     }
     for &i in &hovered.edges.1 {
         replace_edge(i, STROKE, &graph, &mut drawn, &mut commands);
@@ -556,7 +624,7 @@ fn save_field_graph(
 
     // Weird error juggling shenanigans (rust devs stabilize try blocks pls)
     type E = Box<dyn std::error::Error>;
-    if let Err(e) = serde_json::to_string_pretty(&graph.0)
+    if let Err(e) = serde_json::to_string_pretty(&*graph)
         .map_err(E::from)
         .and_then(|serialized| {
             std::fs::File::create(&save_path.0)
@@ -567,5 +635,13 @@ fn save_field_graph(
         eprintln!("{e}");
     } else {
         eprintln!("Saved to {}", save_path.0);
+    }
+}
+
+fn point_fill(graph: &FieldGraph, i: usize) -> Srgba {
+    if graph.shoot_idxs.contains(&i) {
+        HIGHLIGHT_2
+    } else {
+        FILL
     }
 }

@@ -180,7 +180,7 @@ fn recompute_robot_path(
     }
 
     let (mut follower, target, transform) = q.single_mut();
-    if let Some(path) = compute_path(transform.translation.truncate(), target.0, &graph.0) {
+    if let Some(path) = compute_path(transform.translation.truncate(), target.0, &graph.sg) {
         follower.target_path = path;
     } else {
         eprintln!("No path found");
