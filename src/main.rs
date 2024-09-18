@@ -5,7 +5,8 @@ mod robot;
 use bevy::prelude::*;
 
 const BG_SCALE_FACTOR: f32 = 0.5;
-const UNITS_SCALE_FACTOR: f32 = 237.18072;
+// const UNITS_SCALE_FACTOR: f32 = 237.18072;
+const UNITS_SCALE_FACTOR: f32 = 169.90256;
 
 fn main() {
     let save_path = std::env::args()
@@ -103,9 +104,9 @@ fn mouse_hover(
 
     mouse_world_pos.0 = world_pos;
 
-    let world_pos_rounded = (world_pos * 1e2).round() / 1e2;
+    let world_pos_rounded = ((world_pos - graph::ORIGIN_OFFSET) * 1e2).round() / 1e2;
     use std::io::Write;
-    print!("\r{},{}\x1b[J\r", world_pos_rounded.x, world_pos_rounded.y);
+    print!("\r{},{}\x1b[J\r", world_pos_rounded.y, -world_pos_rounded.x);
     std::io::stdout().flush().expect("IO error");
 }
 

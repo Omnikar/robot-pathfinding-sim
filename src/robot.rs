@@ -57,7 +57,7 @@ pub struct TargetPosition(Vec2);
 fn spawn_robot(mut commands: Commands) {
     let shapes = {
         let rect_shape = shapes::Rectangle {
-            extents: Vec2::new(0.62, 0.62),
+            extents: Vec2::new(0.82, 0.82),
             ..Default::default()
         };
         let rect = commands
@@ -98,7 +98,7 @@ fn spawn_robot(mut commands: Commands) {
         // rad/s
         max_speed: 4.0,
     };
-    let init_pos = Vec2::new(1.05, -1.9);
+    let init_pos = Vec2::new(1.43, -2.67);
     let init_rot = PI / 2.0;
     commands
         .spawn((Robot, TargetPosition(init_pos), follower, facer))

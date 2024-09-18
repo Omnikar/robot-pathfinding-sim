@@ -13,6 +13,7 @@ const UNITS_SCALE: Vec3 = Vec3::new(
     1.0 / crate::UNITS_SCALE_FACTOR,
     1.0,
 );
+pub const ORIGIN_OFFSET: Vec2 = Vec2::new(4.1, -4.04);
 
 const FILL: Srgba = WHITE;
 const STROKE: Srgba = GREEN;
@@ -45,20 +46,28 @@ fn init_field_graph(save_path: Res<SavePath>, mut commands: Commands) {
     type E = Box<dyn std::error::Error>;
     let graph = match std::fs::File::open(&save_path.0)
         .map_err(E::from)
-        .and_then(|f| serde_json::from_reader(f).map_err(E::from))
+        .and_then(|f| serde_json::from_reader::<_, FieldGraph>(f).map_err(E::from))
     {
-        Ok(graph) => graph,
+        Ok(mut graph) => {
+            for node in graph.sg.nodes.iter_mut() {
+                node.y *= -1.0;
+                std::mem::swap(&mut node.x, &mut node.y);
+                *node += ORIGIN_OFFSET;
+            }
+            graph
+        }
         Err(_) => FieldGraph {
             sg: SpatialGraph {
                 nodes: vec![
-                    Vec2::new(0.0, 0.60),
-                    Vec2::new(2.19, -0.26),
-                    Vec2::new(2.25, 1.58),
-                    Vec2::new(0.0, 2.12),
-                    Vec2::new(-1.99, 1.70),
-                    Vec2::new(-1.47, -0.45),
-                    Vec2::new(-0.45, -1.44),
-                    Vec2::new(1.66, -1.42),
+                    Vec2::new(0.0, 0.84),
+                    Vec2::new(3.06, -0.36),
+                    #[allow(clippy::approx_constant)]
+                    Vec2::new(3.14, 2.21),
+                    Vec2::new(0.0, 2.96),
+                    Vec2::new(-2.78, 2.37),
+                    Vec2::new(-2.05, -0.63),
+                    Vec2::new(-0.63, -2.01),
+                    Vec2::new(2.32, -1.98),
                 ],
                 edges: vec![
                     (0, 1),
@@ -79,7 +88,7 @@ fn init_field_graph(save_path: Res<SavePath>, mut commands: Commands) {
     commands.insert_resource(graph);
 }
 
-#[derive(Resource, Serialize, Deserialize)]
+#[derive(Resource, Serialize, Deserialize, Clone)]
 pub struct FieldGraph {
     #[serde(flatten)]
     pub sg: SpatialGraph,
@@ -622,9 +631,15 @@ fn save_field_graph(
         return;
     }
 
+    let mut save_graph = graph.clone();
+    for node in save_graph.sg.nodes.iter_mut() {
+        *node -= ORIGIN_OFFSET;
+        std::mem::swap(&mut node.x, &mut node.y);
+        node.y *= -1.0;
+    }
     // Weird error juggling shenanigans (rust devs stabilize try blocks pls)
     type E = Box<dyn std::error::Error>;
-    if let Err(e) = serde_json::to_string_pretty(&*graph)
+    if let Err(e) = serde_json::to_string_pretty(&save_graph)
         .map_err(E::from)
         .and_then(|serialized| {
             std::fs::File::create(&save_path.0)
