@@ -44,47 +44,16 @@ impl Plugin for FieldGraphPlugin {
 
 fn init_field_graph(save_path: Res<SavePath>, mut commands: Commands) {
     type E = Box<dyn std::error::Error>;
-    let graph = match std::fs::File::open(&save_path.0)
+    let mut graph = std::fs::File::open(&save_path.0)
         .map_err(E::from)
         .and_then(|f| serde_json::from_reader::<_, FieldGraph>(f).map_err(E::from))
-    {
-        Ok(mut graph) => {
-            for node in graph.sg.nodes.iter_mut() {
-                node.y *= -1.0;
-                std::mem::swap(&mut node.x, &mut node.y);
-                *node += ORIGIN_OFFSET;
-            }
-            graph
-        }
-        Err(_) => FieldGraph {
-            sg: SpatialGraph {
-                nodes: vec![
-                    Vec2::new(0.0, 0.84),
-                    Vec2::new(3.06, -0.36),
-                    #[allow(clippy::approx_constant)]
-                    Vec2::new(3.14, 2.21),
-                    Vec2::new(0.0, 2.96),
-                    Vec2::new(-2.78, 2.37),
-                    Vec2::new(-2.05, -0.63),
-                    Vec2::new(-0.63, -2.01),
-                    Vec2::new(2.32, -1.98),
-                ],
-                edges: vec![
-                    (0, 1),
-                    (0, 3),
-                    (0, 5),
-                    (1, 2),
-                    (2, 3),
-                    (3, 4),
-                    (4, 5),
-                    (5, 6),
-                    (6, 7),
-                    (7, 1),
-                ],
-            },
-            shoot_idxs: Set::new(),
-        },
-    };
+        .or_else(|_| serde_json::from_str(include_str!("../assets/default-graph.json")))
+        .unwrap();
+    for node in graph.sg.nodes.iter_mut() {
+        node.y *= -1.0;
+        std::mem::swap(&mut node.x, &mut node.y);
+        *node += ORIGIN_OFFSET;
+    }
     commands.insert_resource(graph);
 }
 

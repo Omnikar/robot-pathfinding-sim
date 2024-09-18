@@ -9,8 +9,8 @@ use crate::graph::{FieldGraph, SpatialGraph};
 use crate::physics::{AngularVelocity, Velocity};
 use crate::{Mode, UNITS_SCALE_FACTOR};
 
-const ROBOT_COLOR: Srgba = RED;
-const ROBOT_BORDER_COLOR: Srgba = DARK_RED;
+const ROBOT_COLOR: Srgba = BLUE;
+const ROBOT_BORDER_COLOR: Srgba = DARK_BLUE;
 
 pub struct RobotPlugin;
 impl Plugin for RobotPlugin {
@@ -98,7 +98,7 @@ fn spawn_robot(mut commands: Commands) {
         // rad/s
         max_speed: 4.0,
     };
-    let init_pos = Vec2::new(1.43, -2.67);
+    let init_pos = Vec2::new(-1.43, -2.67);
     let init_rot = PI / 2.0;
     commands
         .spawn((Robot, TargetPosition(init_pos), follower, facer))
