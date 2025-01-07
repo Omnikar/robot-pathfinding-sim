@@ -53,7 +53,7 @@ fn add_camera(mut commands: Commands) {
 struct BackgroundHandle(Handle<Image>);
 
 fn set_background(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let texture = asset_server.load("blue-half-field.png");
+    let texture = asset_server.load("blue-half-field-2024.png");
     commands.insert_resource(BackgroundHandle(texture.clone()));
     commands.spawn(SpriteBundle {
         texture,
