@@ -6,7 +6,7 @@ use bevy::prelude::*;
 
 const BG_SCALE_FACTOR: f32 = 0.5;
 // const UNITS_SCALE_FACTOR: f32 = 237.18072;
-const UNITS_SCALE_FACTOR: f32 = 169.90256;
+const UNITS_SCALE_FACTOR: f32 = 199.9552895005;
 
 fn main() {
     let save_path = std::env::args()
