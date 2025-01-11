@@ -13,7 +13,7 @@ const UNITS_SCALE: Vec3 = Vec3::new(
     1.0 / crate::UNITS_SCALE_FACTOR,
     1.0,
 );
-pub const ORIGIN_OFFSET: Vec2 = Vec2::new(4.1, -4.04);
+pub const ORIGIN_OFFSET: Vec2 = Vec2::new(4.02, -4.39);
 
 const FILL: Srgba = WHITE;
 const STROKE: Srgba = GREEN;

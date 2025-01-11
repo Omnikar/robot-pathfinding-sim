@@ -4,9 +4,9 @@ mod robot;
 
 use bevy::prelude::*;
 
-const BG_SCALE_FACTOR: f32 = 0.5;
+const BG_SCALE_FACTOR: f32 = 0.47;
 // const UNITS_SCALE_FACTOR: f32 = 237.18072;
-const UNITS_SCALE_FACTOR: f32 = 169.90256;
+const UNITS_SCALE_FACTOR: f32 = 199.9552895005;
 
 fn main() {
     let save_path = std::env::args()
@@ -53,7 +53,7 @@ fn add_camera(mut commands: Commands) {
 struct BackgroundHandle(Handle<Image>);
 
 fn set_background(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let texture = asset_server.load("blue-half-field-2024.png");
+    let texture = asset_server.load("blue-half-field-2025.png");
     commands.insert_resource(BackgroundHandle(texture.clone()));
     commands.spawn(SpriteBundle {
         texture,
