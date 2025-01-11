@@ -246,6 +246,7 @@ fn mouse_interaction(
     if mouse_click.just_pressed(MouseButton::Left) {
         target.0 = mouse_pos.0;
     } else if mouse_click.just_pressed(MouseButton::Right) {
+        target.0 = mouse_pos.0;
         transform.translation.x = mouse_pos.0.x;
         transform.translation.y = mouse_pos.0.y;
     } else {
