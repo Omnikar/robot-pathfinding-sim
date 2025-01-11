@@ -74,7 +74,7 @@ fn set_window_size(
     if let Some(background) = images.get(&background_handle.0) {
         let size = background.size_f32() * BG_SCALE_FACTOR;
         let mut window = windows.single_mut();
-        window.resolution.set(size.x, size.y);
+        window.resolution.set(size.x.floor(), size.y.floor());
     }
 }
 
