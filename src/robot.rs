@@ -57,7 +57,7 @@ pub struct TargetPosition(Vec2);
 fn spawn_robot(mut commands: Commands) {
     let shapes = {
         let rect_shape = shapes::Rectangle {
-            extents: Vec2::new(0.82, 0.82),
+            extents: Vec2::new(0.61, 0.61),
             ..Default::default()
         };
         let rect = commands
