@@ -1,3 +1,4 @@
+mod displayauto;
 mod graph;
 mod physics;
 mod robot;
@@ -26,6 +27,7 @@ fn main() {
             graph::FieldGraphPlugin,
             physics::PhysicsPlugin,
             robot::RobotPlugin,
+            displayauto::AutoPlugin,
         ))
         .add_systems(Startup, (add_camera, set_background))
         .insert_resource(SavePath(save_path))
