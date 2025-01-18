@@ -111,7 +111,7 @@ fn draw_field_graph(graph: Res<FieldGraph>, mut drawn: ResMut<DrawnGraph>, mut c
     }
 }
 
-fn draw_node(
+pub fn draw_node(
     node: Vec2,
     stroke_color: Srgba,
     fill_color: Srgba,
@@ -134,8 +134,9 @@ fn draw_node(
         .id()
 }
 
-fn draw_edge(p1: Vec2, p2: Vec2, color: Srgba, commands: &mut Commands) -> Entity {
+pub fn draw_edge(p1: Vec2, p2: Vec2, color: Srgba, commands: &mut Commands) -> Entity {
     let zmod = match color {
+        BLUE_VIOLET => 0.13,
         NEG_HIGHLIGHT => 0.12,
         HIGHLIGHT => 0.11,
         _ => 0.1,

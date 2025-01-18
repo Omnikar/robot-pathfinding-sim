@@ -189,7 +189,7 @@ fn recompute_robot_path(
     reader.clear();
 }
 
-fn compute_path(start: Vec2, end: Vec2, graph: &SpatialGraph) -> Option<Vec<Vec2>> {
+pub fn compute_path(start: Vec2, end: Vec2, graph: &SpatialGraph) -> Option<Vec<Vec2>> {
     let mut graph = graph.clone();
     let mut insert_node = |new_node: Vec2| {
         let closest = graph

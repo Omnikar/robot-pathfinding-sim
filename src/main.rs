@@ -13,6 +13,9 @@ fn main() {
     let save_path = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "graph.json".to_owned());
+    let auto_path = std::env::args()
+        .nth(2)
+        .unwrap_or_else(|| "auto.json".to_owned());
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
@@ -31,6 +34,7 @@ fn main() {
         ))
         .add_systems(Startup, (add_camera, set_background))
         .insert_resource(SavePath(save_path))
+        .insert_resource(AutoPath(auto_path))
         .insert_resource(MouseWorldPos(Vec2::ZERO))
         .insert_state(Mode::Normal)
         .add_systems(Update, (set_window_size, mouse_hover, switch_modes))
@@ -39,6 +43,9 @@ fn main() {
 
 #[derive(Resource)]
 struct SavePath(String);
+
+#[derive(Resource)]
+struct AutoPath(String);
 
 fn add_camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle {
