@@ -5,6 +5,7 @@ use bevy_prototype_lyon::prelude::*;
 
 use pathfinding::directed::astar::astar;
 
+use crate::displayauto::{Auto, Waypoints};
 use crate::graph::{FieldGraph, SpatialGraph};
 use crate::physics::{AngularVelocity, Velocity};
 use crate::{Mode, UNITS_SCALE_FACTOR};
@@ -30,6 +31,7 @@ impl Plugin for RobotPlugin {
                     recompute_robot_path,
                     face_target,
                     mouse_interaction.run_if(in_state(Mode::Normal)),
+                    run_auto,
                 ),
             );
     }
@@ -189,7 +191,7 @@ fn recompute_robot_path(
     reader.clear();
 }
 
-fn compute_path(start: Vec2, end: Vec2, graph: &SpatialGraph) -> Option<Vec<Vec2>> {
+pub fn compute_path(start: Vec2, end: Vec2, graph: &SpatialGraph) -> Option<Vec<Vec2>> {
     let mut graph = graph.clone();
     let mut insert_node = |new_node: Vec2| {
         let closest = graph
@@ -256,4 +258,20 @@ fn mouse_interaction(
     if updated {
         writer.send_default();
     }
+}
+
+fn run_auto(
+    mut robot_q: Query<(&mut Transform, &mut PathFollower), With<Robot>>,
+    keys: Res<ButtonInput<KeyCode>>,
+    auto: Res<Auto>,
+    wpts: Res<Waypoints>,
+    graph: Res<FieldGraph>,
+) {
+    if !keys.just_pressed(KeyCode::KeyR) {
+        return;
+    }
+    let (mut transform, mut target_path) = robot_q.single_mut();
+    target_path.target_path = crate::displayauto::gen_auto_path(&auto, &wpts, &graph);
+    transform.translation.x = target_path.target_path[0].x;
+    transform.translation.y = target_path.target_path[0].y;
 }
